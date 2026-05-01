@@ -3,6 +3,9 @@ import AppKit
 import Foundation
 
 // Run with: swift examples/vision_mac.swift <image-path>
+//
+// VNImageRequestHandler.perform is synchronous on macOS — request completion
+// handlers fire inline before perform returns, so no semaphore is needed.
 
 guard CommandLine.arguments.count >= 2 else {
     FileHandle.standardError.write("usage: swift examples/vision_mac.swift <image-path>\n".data(using: .utf8)!)
@@ -15,8 +18,6 @@ guard let nsImage = NSImage(contentsOfFile: path),
     FileHandle.standardError.write("failed to load image: \(path)\n".data(using: .utf8)!)
     exit(2)
 }
-
-let semaphore = DispatchSemaphore(value: 0)
 
 let textRequest = VNRecognizeTextRequest { request, _ in
     print("text:")
@@ -33,7 +34,6 @@ textRequest.recognitionLevel = .accurate
 textRequest.usesLanguageCorrection = true
 
 let faceRequest = VNDetectFaceRectanglesRequest { request, _ in
-    defer { semaphore.signal() }
     print("faces:")
     if let observations = request.results as? [VNFaceObservation] {
         for obs in observations {
@@ -45,4 +45,3 @@ let faceRequest = VNDetectFaceRectanglesRequest { request, _ in
 
 let handler = VNImageRequestHandler(cgImage: cgImage, options: [:])
 try handler.perform([textRequest, faceRequest])
-_ = semaphore.wait(timeout: DispatchTime.now() + .seconds(30))
