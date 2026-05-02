@@ -11,7 +11,7 @@ OCR functionality is intentionally duplicated against `rb-vision-ocrmac`: that g
 1. Thin wrapper. Pass-through Vision API. One image → one string (newline separator, optional `\t` for sub-fields). Option expansion (multi-language switching, confidence filtering, etc.) is intentionally not added until needed.
 2. Fixed defaults: text recognition uses ja-JP + en-US, `.accurate`, `usesLanguageCorrection`. Face detection uses VNDetectFaceRectanglesRequest (rect only, no landmarks). Changes go through new API methods; never break existing behavior.
 3. 30s timeout, failure represented as an empty string. Does not raise exceptions.
-4. C bridge string handoff. Each method has its own `@_cdecl` pair. Single shared `vision_mac_free`. Bridge function signatures fixed at `UnsafePointer<CChar>` ↔ `UnsafeMutablePointer<CChar>`.
+4. C bridge string handoff. Each method has its own `@c` (SE-0495) pair. Single shared `vision_mac_free`. Bridge function signatures fixed at `UnsafePointer<CChar>` ↔ `UnsafeMutablePointer<CChar>`.
 5. Scaffold parity. `swift_gem new rb-vision-mac` produces a skeleton whose only diffs against this repo are the implementation body, fixtures, and build artifacts.
 
 ## Architecture
@@ -28,7 +28,7 @@ ext/vision_mac/vision_mac.c   ← rb_define_singleton_method
   │
   │   vision_mac_{recognize_text,detect_faces}(c_path)
   ▼
-ext/vision_mac/Sources/VisionMac/VisionMacBridge.swift   ← @_cdecl
+ext/vision_mac/Sources/VisionMac/VisionMacBridge.swift   ← @c (SE-0495)
   │
   ▼
 ext/vision_mac/Sources/VisionMac/VisionMac.swift   ← NSImage + VNRecognizeTextRequest / VNDetectFaceRectanglesRequest
@@ -50,7 +50,7 @@ ext/vision_mac/Sources/VisionMac/VisionMac.swift   ← NSImage + VNRecognizeText
 |---|---|
 | `lib/vision_mac.rb` | `require_relative` to load the .bundle; host of `module VisionMac` |
 | `ext/vision_mac/vision_mac.c` | `Init_vision_mac` exposes the singleton methods; copies Swift-returned `char*` into a Ruby UTF-8 String, then calls `vision_mac_free` |
-| `VisionMacBridge.swift` | C ABI exports via `@_cdecl`. Calls Swift implementations and returns C strings via `strdup` |
+| `VisionMacBridge.swift` | C ABI exports via `@c` (SE-0495). Calls Swift implementations and returns C strings via `strdup` |
 | `VisionMac.swift` | Real implementation: `NSImage` load → `VNImageRequestHandler.perform` → request-specific handlers. `DispatchSemaphore` enforces the 30s timeout |
 | `ext/vision_mac/extconf.rb` | `SwiftGem::Mkmf.create_swift_makefile("vision_mac/vision_mac", package: "VisionMac", source_dir: __dir__)` |
 | `examples/vision_mac.swift` | Pure-Swift sample script. Ruby-free, kept as a Vision-behavior reference |
@@ -76,7 +76,7 @@ t-wada style RED → GREEN → REFACTOR independent commits. test-unit. Real fix
 
 ## Environment requirements
 
-macOS 12+, Apple Silicon, Swift 6.0+, Ruby 3.2+, bundler 4.x, rake-compiler 1.2+. `Gemfile` references swift_gem via `path: "../swift_gem"` until publish. `Gemfile.lock` not git-tracked.
+macOS 12+, Apple Silicon, Swift 6.3+ (SE-0495 `@c` requires 6.3; install via [swiftly](https://www.swift.org/install/macos/)), Ruby 3.2+, bundler 4.x, rake-compiler 1.2+. `Gemfile` references swift_gem via `path: "../swift_gem"` until publish. `Gemfile.lock` not git-tracked.
 
 ## Prohibitions
 

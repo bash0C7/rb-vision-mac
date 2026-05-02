@@ -4,6 +4,12 @@ Ruby binding for Apple's Vision framework on macOS / Apple Silicon. Calls `VNRec
 
 > OCR functionality overlaps with [rb-vision-ocrmac](https://github.com/bash0C7/rb-vision-ocrmac), which remains as an OCR-only study piece. This gem is the broader Vision binding.
 
+## Requirements
+
+- macOS 12+, Apple Silicon
+- Swift 6.3+ (SE-0495 `@c` attribute). Install via [swiftly](https://www.swift.org/install/macos/) — Xcode not required.
+- Ruby 3.2+, Bundler 4.x
+
 ## Installation
 
 ```bash
