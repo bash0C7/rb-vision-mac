@@ -1,5 +1,5 @@
 #include <ruby.h>
-#include "vision_mac.h"
+#include "VisionMac-Swift.h"
 
 static VALUE call_swift_string(char *(*fn)(const char *), VALUE input) {
     const char *c_input = StringValueCStr(input);
