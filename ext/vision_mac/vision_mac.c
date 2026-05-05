@@ -1,8 +1,14 @@
 #include <ruby.h>
+#include <errno.h>
+#include <sys/stat.h>
 #include "VisionMac-Swift.h"
 
 static VALUE call_swift_string(char *(*fn)(const char *), VALUE input) {
     const char *c_input = StringValueCStr(input);
+    struct stat st;
+    if (stat(c_input, &st) != 0) {
+        rb_syserr_fail(errno, c_input);
+    }
     char *result = fn(c_input);
     if (result == NULL) {
         return rb_utf8_str_new_cstr("");
