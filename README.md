@@ -40,6 +40,22 @@ Or open an IRB console with the gem preloaded:
 bundle exec rake console
 ```
 
+## Preconditions: caller is responsible for image preprocessing
+
+This gem is a **thin pass-through wrapper** around Vision. It does no image preprocessing — no rotation, scaling, orientation correction, page splitting, or layout normalization. If Vision can't read the image as-is, the methods return `""`.
+
+Vision has known weak spots that show up in real workloads:
+
+- **Vertical Japanese book pages with densely-packed text columns** (`recognize_text`) — Vision often fails to detect any text regions and returns 0 observations. Vertical writing is supported in principle, but region segmentation gives up on book-page layouts with many narrow columns side-by-side. Workaround at the caller: rotate the page 90° so columns become rows, or upscale low-resolution scans (≲ 1000px on the long side) before passing the path in.
+- **Low-resolution scans** (`recognize_text`) — sub-1000px images sometimes return zero observations even for clean horizontal text. Upscale before calling.
+- **Multi-page PDFs / multi-region images** — split into per-page / per-region images upstream; the methods take one image at a time.
+- **Skew, heavy noise, faint text** — deskew / denoise / contrast-boost in the caller.
+- **Faces under unusual angles / occlusion / low light** (`detect_faces`) — Vision's `VNDetectFaceRectanglesRequest` may miss faces; preprocessing (lighting normalization, rotation) is the caller's call.
+
+**Detection of these cases is also the caller's job.** Both methods return `""` for "Vision succeeded but found nothing" and "Vision could not segment the image" — the gem does not distinguish them. Callers that need to retry with preprocessing should branch on `output.empty?` and apply their own fallback chain.
+
+A missing path is the one failure mode this gem **does** surface as an exception (`Errno::ENOENT`), since that is unambiguously bad input and never a legitimate empty result.
+
 ## Reference: Ruby example
 
 `example.rb` at the repo root demonstrates both methods end-to-end:
