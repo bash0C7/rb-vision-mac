@@ -12,8 +12,10 @@ class VisionMacTest < Test::Unit::TestCase
     assert(text.include?("17"), "Expected '17' in OCR output, got: #{text.inspect}")
   end
 
-  test "recognize_text returns empty string for nonexistent path" do
-    assert_equal("", VisionMac.recognize_text("/nonexistent/path/missing.png"))
+  test "recognize_text raises Errno::ENOENT for nonexistent path" do
+    assert_raise(Errno::ENOENT) do
+      VisionMac.recognize_text("/nonexistent/path/missing.png")
+    end
   end
 
   test "detect_faces returns a String for a face-less image" do
@@ -35,7 +37,9 @@ class VisionMacTest < Test::Unit::TestCase
     end
   end
 
-  test "detect_faces returns empty string for nonexistent path" do
-    assert_equal("", VisionMac.detect_faces("/nonexistent/path/missing.png"))
+  test "detect_faces raises Errno::ENOENT for nonexistent path" do
+    assert_raise(Errno::ENOENT) do
+      VisionMac.detect_faces("/nonexistent/path/missing.png")
+    end
   end
 end
