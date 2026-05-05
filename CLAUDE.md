@@ -10,7 +10,7 @@ OCR functionality is intentionally duplicated against `rb-vision-ocrmac`: that g
 
 1. Thin wrapper. Pass-through Vision API. One image → one string (newline separator, optional `\t` for sub-fields). Option expansion (multi-language switching, confidence filtering, etc.) is intentionally not added until needed.
 2. Fixed defaults: text recognition uses ja-JP + en-US, `.accurate`, `usesLanguageCorrection`. Face detection uses VNDetectFaceRectanglesRequest (rect only, no landmarks). Changes go through new API methods; never break existing behavior.
-3. 30s timeout, failure represented as an empty string. Does not raise exceptions.
+3. Vision-side failure (unreadable image content, OS error, 30s timeout) → empty string, no exception. Missing path → `Errno::ENOENT` (the C wrapper `stat()`s the path before handoff so callers can tell bad input from a genuine empty result).
 4. C bridge string handoff. Each method has its own `@c` (SE-0495) pair. Single shared `vision_mac_free`. Bridge function signatures fixed at `UnsafePointer<CChar>` ↔ `UnsafeMutablePointer<CChar>`.
 5. Scaffold parity. `swift_gem new rb-vision-mac` produces a skeleton whose only diffs against this repo are the implementation body, fixtures, and build artifacts.
 
@@ -53,7 +53,7 @@ ext/vision_mac/Sources/VisionMac/VisionMac.swift   ← NSImage + VNRecognizeText
 | `VisionMacBridge.swift` | C ABI exports via `@c` (SE-0495). Calls Swift implementations and returns C strings via `strdup` |
 | `VisionMac.swift` | Real implementation: `NSImage` load → `VNImageRequestHandler.perform` → request-specific handlers. `DispatchSemaphore` enforces the 30s timeout |
 | `ext/vision_mac/extconf.rb` | `SwiftGem::Mkmf.create_swift_makefile("vision_mac/vision_mac", package: "VisionMac", source_dir: __dir__)` |
-| `examples/vision_mac.swift` | Pure-Swift sample script. Ruby-free, kept as a Vision-behavior reference |
+| `examples/vision_mac.swift` | Pure-Swift sample script: `xcrun swift examples/vision_mac.swift <path>`. Ruby-free, kept as a Vision-behavior reference. Must use `xcrun swift` (Xcode toolchain) — swiftly 6.3's interpret mode cannot JIT-link Apple system frameworks |
 | `Rakefile` | `Rake::ExtensionTask("vision_mac")` + `task test: :compile`. `task console: :compile` for IRB |
 
 ## Build flow

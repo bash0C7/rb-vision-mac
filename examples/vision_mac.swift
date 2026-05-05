@@ -2,13 +2,18 @@ import Vision
 import AppKit
 import Foundation
 
-// Run with: swift examples/vision_mac.swift <image-path>
+// Run with: xcrun swift examples/vision_mac.swift <image-path>
+//
+// Use 'xcrun swift' (Xcode toolchain), not bare 'swift' (swiftly).
+// swiftly 6.3's swift interpret mode fails to JIT-link Apple system
+// frameworks (Vision, AppKit), so symbol resolution errors at startup.
+// Xcode's swift uses dyld for framework linking and works as expected.
 //
 // VNImageRequestHandler.perform is synchronous on macOS — request completion
 // handlers fire inline before perform returns, so no semaphore is needed.
 
 guard CommandLine.arguments.count >= 2 else {
-    FileHandle.standardError.write("usage: swift examples/vision_mac.swift <image-path>\n".data(using: .utf8)!)
+    FileHandle.standardError.write("usage: xcrun swift examples/vision_mac.swift <image-path>\n".data(using: .utf8)!)
     exit(1)
 }
 

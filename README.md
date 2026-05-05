@@ -32,7 +32,7 @@ VisionMac.detect_faces("path/to/photo.png")
 # => "0.123\t0.456\t0.234\t0.345\n..."   # x, y, width, height in normalized 0..1 coords
 ```
 
-`recognize_text` uses ja-JP + en-US, `.accurate`, with language correction. `detect_faces` returns `CGRect` values normalized to the image (Vision's coordinate system: origin at lower-left). On failure (unreadable file, OS error, 30s timeout) the methods return `""`.
+`recognize_text` uses ja-JP + en-US, `.accurate`, with language correction. `detect_faces` returns `CGRect` values normalized to the image (Vision's coordinate system: origin at lower-left). On Vision-side failure (unreadable image content, OS error, 30s timeout) the methods return `""`. **A missing path raises `Errno::ENOENT`** rather than silently returning `""`, so callers can distinguish bad input from a genuine empty result.
 
 Or open an IRB console with the gem preloaded:
 
@@ -55,8 +55,10 @@ It defaults to `test/fixtures/sample_jp.png` if no argument is given.
 A self-contained Swift script lives at `examples/vision_mac.swift` for sanity-checking Vision behavior without going through Ruby:
 
 ```bash
-swift examples/vision_mac.swift path/to/image.png
+xcrun swift examples/vision_mac.swift path/to/image.png
 ```
+
+Use `xcrun swift` (Xcode toolchain), not bare `swift` from swiftly — swiftly 6.3's interpret mode does not JIT-link Apple system frameworks (Vision, AppKit) and fails at startup with symbol-resolution errors. Xcode's swift uses dyld and works as-is.
 
 ## Development
 
