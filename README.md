@@ -78,7 +78,7 @@ bundle install
 bundle exec rake test
 ```
 
-`rake test` runs `xcrun swift build -c release --package-path ext/vision_mac`, builds the C extension into `lib/vision_mac/vision_mac.bundle`, then runs the tests. `bundle exec rake compile` runs only the build. `bundle exec rbs -I sig validate` checks `sig/vision_mac.rbs`.
+`rake test` validates `sig/vision_mac.rbs`, runs `xcrun swift build -c release --package-path ext/vision_mac`, builds the C extension into `lib/vision_mac/vision_mac.bundle`, then runs the tests. `bundle exec rake compile` runs only the build.
 
 ## License
 
