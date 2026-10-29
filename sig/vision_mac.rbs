@@ -1,0 +1,19 @@
+module VisionMac
+  # The gem version.
+  VERSION: String
+
+  # Base class for errors raised by this gem.
+  class Error < StandardError
+  end
+
+  # Recognizes text in the image at +path+ with ja-JP and en-US, the accurate level, and language correction.
+  # Returns one line per observation, or an empty string when Vision finds nothing or cannot read the image.
+  # Raises a SystemCallError such as Errno::ENOENT when +path+ cannot be stat'ed.
+  def self.recognize_text: (String path) -> String
+
+  # Detects face rectangles in the image at +path+.
+  # Returns one "x\ty\twidth\theight" line per face in normalized coordinates with the origin at the lower left,
+  # or an empty string when no face is found or Vision cannot read the image.
+  # Raises a SystemCallError such as Errno::ENOENT when +path+ cannot be stat'ed.
+  def self.detect_faces: (String path) -> String
+end

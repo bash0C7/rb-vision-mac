@@ -4,6 +4,13 @@ require "bundler/gem_tasks"
 require "rake/testtask"
 require "rake/extensiontask"
 
+desc "Build the Swift package"
+task :swift do
+  sh "xcrun", "swift", "build", "-c", "release", "--package-path", "ext/vision_mac"
+end
+
+task compile: :swift
+
 Rake::ExtensionTask.new("vision_mac") do |ext|
   ext.lib_dir = "lib/vision_mac"
 end

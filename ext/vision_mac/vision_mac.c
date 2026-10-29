@@ -3,16 +3,13 @@
 #include <sys/stat.h>
 #include "VisionMac-Swift.h"
 
-static VALUE call_swift_string(char *(*fn)(const char *), VALUE input) {
-    const char *c_input = StringValueCStr(input);
+static VALUE call_swift_string(char *(*fn)(const char *), VALUE path) {
+    const char *c_path = StringValueCStr(path);
     struct stat st;
-    if (stat(c_input, &st) != 0) {
-        rb_syserr_fail(errno, c_input);
+    if (stat(c_path, &st) != 0) {
+        rb_syserr_fail(errno, c_path);
     }
-    char *result = fn(c_input);
-    if (result == NULL) {
-        return rb_utf8_str_new_cstr("");
-    }
+    char *result = fn(c_path);
     VALUE rb_result = rb_utf8_str_new_cstr(result);
     vision_mac_free(result);
     return rb_result;
