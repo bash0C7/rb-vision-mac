@@ -2,17 +2,18 @@
 
 ## Position
 
-Ruby native binding for Apple's Vision framework on macOS. Sibling of `rb-vision-ocrmac` (which is OCR-only, study/legacy) and built on the same `bash0C7/swift_gem` scaffold. Exposes a broader Vision surface beyond OCR, starting with text recognition and face detection.
+Ruby native binding for Apple's Vision framework on macOS, built on the `bash0C7/swift_gem` scaffold. Exposes text recognition and face detection. Sibling of `rb-vision-ocrmac` (OCR-only study piece).
 
 OCR functionality is intentionally duplicated against `rb-vision-ocrmac`: that gem stays a thin OCR-only study piece, while this gem grows the multi-request Vision surface.
 
 ## Core design principles
 
-1. Thin wrapper. Pass-through Vision API. One image → one string (newline separator, optional `\t` for sub-fields). Option expansion (multi-language switching, confidence filtering, etc.) is intentionally not added until needed.
-2. Fixed defaults: text recognition uses ja-JP + en-US, `.accurate`, `usesLanguageCorrection`. Face detection uses VNDetectFaceRectanglesRequest (rect only, no landmarks). Changes go through new API methods; never break existing behavior.
-3. Vision-side failure (unreadable image content, OS error, 30s timeout) → empty string, no exception. Missing path → `Errno::ENOENT` (the C wrapper `stat()`s the path before handoff so callers can tell bad input from a genuine empty result).
-4. C bridge string handoff. Each method has its own `@c` (SE-0495) pair. Single shared `vision_mac_free`. Bridge function signatures fixed at `UnsafePointer<CChar>` ↔ `UnsafeMutablePointer<CChar>`.
-5. Scaffold parity. `swift_gem new rb-vision-mac` produces a skeleton whose only diffs against this repo are the implementation body, fixtures, and build artifacts.
+1. Thin wrapper. Pass-through Vision API. One image → one string (newline separator, `\t` for sub-fields). No option expansion (language switching, confidence filtering, etc.) until needed.
+2. Fixed defaults: text recognition uses ja-JP + en-US, `.accurate`, `usesLanguageCorrection`. Face detection uses `VNDetectFaceRectanglesRequest` (rect only, no landmarks). Changes go through new API methods; existing behavior stays.
+3. Vision-side failure (unloadable image, `perform` throwing) → empty string, no exception. A path that fails `stat()` → `SystemCallError` (`Errno::ENOENT` for a missing file), raised by the C wrapper before handing off to Swift.
+4. `VNImageRequestHandler.perform` is synchronous: it returns after every request has finished, and results are read from `request.results` afterwards.
+5. C bridge string handoff. Each method has its own `@c(<c_name>)` (SE-0495) function (`cRecognizeText`, `cDetectFaces`) and a single shared `cFree` exported as `vision_mac_free`. Signatures are fixed at `UnsafePointer<CChar>` → `UnsafeMutablePointer<CChar>`.
+6. Scaffold parity. `bundle exec rake "new[rb-vision-mac,<dir>]"` in swift_gem produces a skeleton whose only diffs against this repo are the implementation body, fixtures, `example.rb`, docs, and build artifacts.
 
 ## Architecture
 
@@ -24,14 +25,14 @@ OCR functionality is intentionally duplicated against `rb-vision-ocrmac`: that g
 lib/vision_mac.rb            ← requires the ext + module declaration
   │
   ▼
-ext/vision_mac/vision_mac.c   ← rb_define_singleton_method
+ext/vision_mac/vision_mac.c   ← rb_define_singleton_method, stat() check
   │
   │   vision_mac_{recognize_text,detect_faces}(c_path)
   ▼
-ext/vision_mac/Sources/VisionMac/VisionMacBridge.swift   ← @c (SE-0495)
+ext/vision_mac/Sources/VisionMac/VisionMacBridge.swift   ← @c(name) (SE-0495)
   │
   ▼
-ext/vision_mac/Sources/VisionMac/VisionMac.swift   ← NSImage + VNRecognizeTextRequest / VNDetectFaceRectanglesRequest
+ext/vision_mac/Sources/VisionMac/VisionMac.swift   ← NSImage → CGImage → VNImageRequestHandler.perform
   │
   ▼
 [Apple Vision framework]
@@ -41,48 +42,53 @@ ext/vision_mac/Sources/VisionMac/VisionMac.swift   ← NSImage + VNRecognizeText
 
 | Method | Returns | Notes |
 |---|---|---|
-| `VisionMac.recognize_text(path)` | newline-separated text | VNRecognizeTextRequest, ja-JP+en-US, `.accurate` |
-| `VisionMac.detect_faces(path)` | newline-separated `"x\ty\tw\th"` (CGRect normalized 0..1) | VNDetectFaceRectanglesRequest. Empty string if no faces |
+| `VisionMac.recognize_text(path)` | newline-separated text | `VNRecognizeTextRequest`, ja-JP+en-US, `.accurate` |
+| `VisionMac.detect_faces(path)` | newline-separated `"x\ty\tw\th"` (normalized 0..1, origin lower-left) | `VNDetectFaceRectanglesRequest`. Empty string if no faces |
+
+Signatures and their documentation live in `sig/vision_mac.rbs`.
 
 ## Module boundaries
 
 | Layer | Responsibility |
 |---|---|
 | `lib/vision_mac.rb` | `require_relative` to load the .bundle; host of `module VisionMac` |
-| `ext/vision_mac/vision_mac.c` | `Init_vision_mac` exposes the singleton methods; copies Swift-returned `char*` into a Ruby UTF-8 String, then calls `vision_mac_free` |
-| `VisionMacBridge.swift` | C ABI exports via `@c` (SE-0495). Calls Swift implementations and returns C strings via `strdup` |
-| `VisionMac.swift` | Real implementation: `NSImage` load → `VNImageRequestHandler.perform` → request-specific handlers. `DispatchSemaphore` enforces the 30s timeout |
-| `ext/vision_mac/extconf.rb` | `SwiftGem::Mkmf.create_swift_makefile("vision_mac/vision_mac", package: "VisionMac", source_dir: __dir__)` |
-| `examples/vision_mac.swift` | Pure-Swift sample script: `xcrun swift examples/vision_mac.swift <path>`. Ruby-free, kept as a Vision-behavior reference. Must use `xcrun swift` (Xcode toolchain) — swiftly 6.3's interpret mode cannot JIT-link Apple system frameworks |
-| `Rakefile` | `Rake::ExtensionTask("vision_mac")` + `task test: :compile`. `task console: :compile` for IRB |
+| `sig/vision_mac.rbs` | RBS for `VERSION`, `Error`, `recognize_text`, `detect_faces` |
+| `ext/vision_mac/vision_mac.c` | `Init_vision_mac` exposes the singleton methods; copies the Swift-returned `char*` into a Ruby UTF-8 String, then calls `vision_mac_free` |
+| `VisionMacBridge.swift` | C ABI exports via `@c(name)`. Calls the Swift implementations and returns C strings via `strdup` |
+| `VisionMac.swift` | `NSImage` load → `VNImageRequestHandler.perform` → format `request.results` |
+| `ext/vision_mac/extconf.rb` | `require_relative "swift_mkmf"` + `SwiftGem::Mkmf.create_swift_makefile("vision_mac/vision_mac", package: "VisionMac", source_dir: __dir__)` |
+| `ext/vision_mac/swift_mkmf.rb` | Vendored copy of swift_gem's `lib/swift_gem/mkmf.rb`, kept identical |
+| `examples/vision_mac.swift` | Ruby-free Vision sample: `xcrun swift examples/vision_mac.swift <path>` |
+| `example.rb` | Ruby sample running both methods on one image |
+| `Rakefile` | `task :swift` + `task compile: :swift` before `Rake::ExtensionTask("vision_mac")`; `task test: :compile`; `task console: :compile` |
 
 ## Build flow
 
-`bundle exec rake test` in one shot — same as `rb-vision-ocrmac`.
+`bundle exec rake test` builds and tests in one shot. `xcrun swift build -c release --package-path ext/vision_mac` writes `VisionMac-Swift.h` under `ext/vision_mac/.build/out/Intermediates.noindex/GeneratedModuleMaps/` (added with `-I`) and the dylib under `ext/vision_mac/.build/release`. `bundle exec rbs -I sig validate` checks the RBS.
 
 ## Usage / why no CLI
 
-Library only — same rationale as `rb-vision-ocrmac`. Interactive checks via `bundle exec rake console`.
+Library only, same as `rb-vision-ocrmac`. Interactive checks via `bundle exec rake console`.
 
 ## TDD discipline
 
-t-wada style RED → GREEN → REFACTOR independent commits. test-unit. Real fixtures under `test/fixtures/` (`sample_jp.png` shared with rb-vision-ocrmac for OCR; face detection currently asserts behavior on the same image since it has no faces).
+t-wada style RED → GREEN → REFACTOR independent commits. test-unit. Real fixtures under `test/fixtures/`: `sample_jp.png` (shared with rb-vision-ocrmac) holds text and no faces, so the face test asserts the output shape only when faces are present.
 
 ## Related projects
 
 - `~/dev/src/github.com/bash0C7/swift_gem` — scaffold/Mkmf framework
 - `~/dev/src/github.com/bash0C7/rb-vision-ocrmac` — OCR-only sibling, study piece
-- `~/dev/src/github.com/bash0C7/archives_go_jp_searcher` — depends on rb-vision-ocrmac (NOT this gem); leave that wiring alone
+- `~/dev/src/github.com/bash0C7/archives_go_jp_searcher` — depends on rb-vision-ocrmac (not this gem); leave that wiring alone
 
 ## Environment requirements
 
-macOS 12+, Apple Silicon, Swift 6.3+ (SE-0495 `@c` requires 6.3; install via [swiftly](https://www.swift.org/install/macos/)), Ruby 3.2+, bundler 4.x, rake-compiler 1.2+. `Gemfile` references swift_gem via `path: "../swift_gem"` until publish. `Gemfile.lock` not git-tracked.
-
-Xcode Command Line Tools required only for running `examples/vision_mac.swift` via `xcrun swift` — swiftly's 6.3 swift binary has broken Apple-framework JIT linkage in interpret mode (verified: SDKROOT, -F, -Xlinker, -sdk all fail). The library build itself does not need CLT. example.swift does not use SE-0495 `@c`, so CLT's older swift (6.2.4) suffices. Install with `xcode-select --install`.
+macOS 27+, Apple Silicon, Xcode 27 (Swift 6.4, builds run `xcrun swift`), Ruby 4.0+, bundler 4.x, rake-compiler 1.2+. `Gemfile.lock` is not git-tracked.
 
 ## Prohibitions
 
 - No Python source
+- No code comments. Swift is documented with DocC (`///`, `- Parameter`, `- Returns`, ``` ``symbol`` ``` links); Ruby is documented with `#` comments above declarations in `sig/vision_mac.rbs`. History goes in commit messages
+- Do not hand-edit `ext/vision_mac/swift_mkmf.rb`; re-copy it from swift_gem
 - Do not git-track `Gemfile.lock`
 - Do not promise thread safety for concurrent calls — add a lock if needed
 - Do not split PDFs / multi-page images here — leave that to callers
