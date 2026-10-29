@@ -12,12 +12,13 @@ OCR functionality overlaps with [rb-vision-ocrmac](https://github.com/bash0C7/rb
 
 ## Installation
 
-```bash
-bundle add rb-vision-mac
-```
+Install from source:
 
 ```bash
-gem install rb-vision-mac
+git clone https://github.com/bash0C7/rb-vision-mac.git
+cd rb-vision-mac
+bundle install
+bundle exec rake compile
 ```
 
 ## Usage

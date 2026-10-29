@@ -60,7 +60,7 @@ Signatures and their documentation live in `sig/vision_mac.rbs`.
 | `ext/vision_mac/swift_mkmf.rb` | Vendored copy of swift_gem's `lib/swift_gem/mkmf.rb`, kept identical |
 | `examples/vision_mac.swift` | Ruby-free Vision sample: `xcrun swift examples/vision_mac.swift <path>` |
 | `example.rb` | Ruby sample running both methods on one image |
-| `Rakefile` | `task :swift` + `task compile: :swift` before `Rake::ExtensionTask("vision_mac")`; `task test: :compile`; `task console: :compile` |
+| `Rakefile` | `task :swift` + `task compile: :swift` before `Rake::ExtensionTask("vision_mac")`; `task :rbs`; `task test: %i[rbs compile]`; `task console: :compile` |
 
 ## Build flow
 
