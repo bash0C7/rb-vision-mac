@@ -1,6 +1,6 @@
 import Foundation
 
-/// Calls ``recognizeText(path:)`` from C as `vision_mac_recognize_text`.
+/// Calls `recognizeText(path:)` from C as `vision_mac_recognize_text`.
 ///
 /// The returned buffer is allocated with `strdup`. Release it with ``cFree(_:)``.
 ///
@@ -12,7 +12,7 @@ public func cRecognizeText(_ path: UnsafePointer<CChar>) -> UnsafeMutablePointer
     return strdup(result)!
 }
 
-/// Calls ``detectFaces(path:)`` from C as `vision_mac_detect_faces`.
+/// Calls `detectFaces(path:)` from C as `vision_mac_detect_faces`.
 ///
 /// The returned buffer is allocated with `strdup`. Release it with ``cFree(_:)``.
 ///
