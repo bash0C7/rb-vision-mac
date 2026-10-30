@@ -1,24 +1,24 @@
 # rb-vision-mac
 
-Ruby binding for Apple's Vision framework on macOS / Apple Silicon. Calls `VNRecognizeTextRequest` (OCR) and `VNDetectFaceRectanglesRequest` (face rectangles) directly from Ruby via Swift Package Manager and a thin C bridge. Built on [swift_gem](https://github.com/bash0C7/swift_gem).
+Ruby binding for Apple's Vision framework on macOS / Apple Silicon. Calls `VNRecognizeTextRequest` (OCR) and `VNDetectFaceRectanglesRequest` (face rectangles) from Ruby via Swift Package Manager and a thin C bridge. Built on [swift_gem](https://github.com/bash0C7/swift_gem).
 
-> OCR functionality overlaps with [rb-vision-ocrmac](https://github.com/bash0C7/rb-vision-ocrmac), which remains as an OCR-only study piece. This gem is the broader Vision binding.
+OCR functionality overlaps with [rb-vision-ocrmac](https://github.com/bash0C7/rb-vision-ocrmac), an OCR-only gem. This gem is the broader Vision binding.
 
 ## Requirements
 
-- macOS 12+, Apple Silicon
-- Swift 6.3+ (SE-0495 `@c` attribute) for the library build. Install via [swiftly](https://www.swift.org/install/macos/).
-- Ruby 3.2+, Bundler 4.x
-- **Xcode Command Line Tools** only if you want to run `examples/vision_mac.swift`. The pure-Swift sample must run under `xcrun swift`; swiftly's 6.3 swift binary cannot JIT-link Apple system frameworks (Vision, AppKit) in interpret mode. The library build itself does not need CLT. Install with `xcode-select --install`.
+- macOS 27+, Apple Silicon
+- Xcode 27 (builds run `xcrun swift`)
+- Ruby 4.0+, Bundler 4.x
 
 ## Installation
 
-```bash
-bundle add rb-vision-mac
-```
+Install from source:
 
 ```bash
-gem install rb-vision-mac
+git clone https://github.com/bash0C7/rb-vision-mac.git
+cd rb-vision-mac
+bundle install
+bundle exec rake compile
 ```
 
 ## Usage
@@ -30,12 +30,12 @@ VisionMac.recognize_text("path/to/image.png")
 # => "Detected text line 1\nDetected text line 2\n..."
 
 VisionMac.detect_faces("path/to/photo.png")
-# => "0.123\t0.456\t0.234\t0.345\n..."   # x, y, width, height in normalized 0..1 coords
+# => "0.123\t0.456\t0.234\t0.345\n..."
 ```
 
-`recognize_text` uses ja-JP + en-US, `.accurate`, with language correction. `detect_faces` returns `CGRect` values normalized to the image (Vision's coordinate system: origin at lower-left). On Vision-side failure (unreadable image content, OS error, 30s timeout) the methods return `""`. **A missing path raises `Errno::ENOENT`** rather than silently returning `""`, so callers can distinguish bad input from a genuine empty result.
+`recognize_text` uses ja-JP + en-US, `.accurate`, with language correction, and returns one line per observation. `detect_faces` returns one `x\ty\twidth\theight` line per face, normalized to 0..1 with the origin at the lower left. Both return `""` when Vision finds nothing, cannot read the image, or fails. A path that cannot be `stat`ed raises `Errno::ENOENT` (or another `SystemCallError`).
 
-Or open an IRB console with the gem preloaded:
+Open an IRB console with the gem preloaded:
 
 ```bash
 bundle exec rake console
@@ -43,39 +43,34 @@ bundle exec rake console
 
 ## Preconditions: caller is responsible for image preprocessing
 
-This gem is a **thin pass-through wrapper** around Vision. It does no image preprocessing — no rotation, scaling, orientation correction, page splitting, or layout normalization. If Vision can't read the image as-is, the methods return `""`.
+This gem passes the image to Vision as-is. It does no rotation, scaling, orientation correction, page splitting, or layout normalization.
 
-Vision has known weak spots that show up in real workloads:
+Cases where Vision tends to return nothing or miss content:
 
-- **Vertical Japanese book pages with densely-packed text columns** (`recognize_text`) — Vision often fails to detect any text regions and returns 0 observations. Vertical writing is supported in principle, but region segmentation gives up on book-page layouts with many narrow columns side-by-side. Workaround at the caller: rotate the page 90° so columns become rows, or upscale low-resolution scans (≲ 1000px on the long side) before passing the path in.
-- **Low-resolution scans** (`recognize_text`) — sub-1000px images sometimes return zero observations even for clean horizontal text. Upscale before calling.
-- **Multi-page PDFs / multi-region images** — split into per-page / per-region images upstream; the methods take one image at a time.
-- **Skew, heavy noise, faint text** — deskew / denoise / contrast-boost in the caller.
-- **Faces under unusual angles / occlusion / low light** (`detect_faces`) — Vision's `VNDetectFaceRectanglesRequest` may miss faces; preprocessing (lighting normalization, rotation) is the caller's call.
+- Vertical Japanese book pages with densely packed text columns (`recognize_text`). Rotate the page 90° so columns become rows, or upscale scans of about 1000px or less on the long side.
+- Low-resolution scans (`recognize_text`). Upscale before calling.
+- Multi-page PDFs or multi-region images. Split them into one image per page or region.
+- Skew, heavy noise, faint text. Deskew, denoise, or boost contrast first.
+- Faces at unusual angles, occluded, or in low light (`detect_faces`). Normalize lighting or rotate first.
 
-**Detection of these cases is also the caller's job.** Both methods return `""` for "Vision succeeded but found nothing" and "Vision could not segment the image" — the gem does not distinguish them. Callers that need to retry with preprocessing should branch on `output.empty?` and apply their own fallback chain.
-
-A missing path is the one failure mode this gem **does** surface as an exception (`Errno::ENOENT`), since that is unambiguously bad input and never a legitimate empty result.
+Both methods return `""` for "Vision found nothing" and "Vision could not segment the image" alike. Branch on `output.empty?` to apply a fallback chain.
 
 ## Reference: Ruby example
 
-`example.rb` at the repo root demonstrates both methods end-to-end:
+`example.rb` runs both methods on one image, defaulting to `test/fixtures/sample_jp.png`:
 
 ```bash
+bundle exec rake compile
 bundle exec ruby example.rb path/to/image.png
 ```
 
-It defaults to `test/fixtures/sample_jp.png` if no argument is given.
-
 ## Reference: pure Swift sample
 
-A self-contained Swift script lives at `examples/vision_mac.swift` for sanity-checking Vision behavior without going through Ruby:
+`examples/vision_mac.swift` runs the same Vision requests without Ruby:
 
 ```bash
 xcrun swift examples/vision_mac.swift path/to/image.png
 ```
-
-Use `xcrun swift` (Xcode toolchain), not bare `swift` from swiftly — swiftly 6.3's interpret mode does not JIT-link Apple system frameworks (Vision, AppKit) and fails at startup with symbol-resolution errors. Xcode's swift uses dyld and works as-is.
 
 ## Development
 
@@ -84,9 +79,7 @@ bundle install
 bundle exec rake test
 ```
 
-`rake test` automatically compiles the Swift Package (`swift build -c release`) and links the C bridge into `lib/vision_mac/vision_mac.bundle` before running the spec, via `Rake::ExtensionTask`.
-
-To run only the build step: `bundle exec rake compile`.
+`rake test` validates `sig/vision_mac.rbs`, runs `xcrun swift build -c release --package-path ext/vision_mac`, builds the C extension into `lib/vision_mac/vision_mac.bundle`, then runs the tests. `bundle exec rake compile` runs only the build.
 
 ## License
 
