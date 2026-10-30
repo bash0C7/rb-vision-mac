@@ -4,6 +4,7 @@ require "test_helper"
 
 class VisionMacTest < Test::Unit::TestCase
   FIXTURE = File.expand_path("../fixtures/sample_jp.png", __dir__)
+  FACE_FIXTURE = ENV["VISION_MAC_TEST_FACE"]
 
   test "recognize_text returns non-empty OCR text from a sample image" do
     text = VisionMac.recognize_text(FIXTURE)
@@ -18,22 +19,21 @@ class VisionMacTest < Test::Unit::TestCase
     end
   end
 
-  test "detect_faces returns a String for a face-less image" do
-    output = VisionMac.detect_faces(FIXTURE)
-    assert_kind_of(String, output)
+  test "detect_faces returns an empty string for a face-less image" do
+    assert_equal("", VisionMac.detect_faces(FIXTURE))
   end
 
-  test "detect_faces output lines contain four tab-separated normalized values when faces exist" do
-    output = VisionMac.detect_faces(FIXTURE)
-    return if output.empty?
+  test "detect_faces returns one line of four normalized values for a single face" do
+    omit("set VISION_MAC_TEST_FACE to a local image holding exactly one face") unless FACE_FIXTURE
 
-    output.split("\n").each do |line|
-      parts = line.split("\t")
-      assert_equal(4, parts.length, "Expected 4 tab-separated values per face, got: #{line.inspect}")
-      parts.each do |p|
-        f = Float(p)
-        assert(f >= 0.0 && f <= 1.0, "Expected normalized 0..1 value, got: #{p.inspect}")
-      end
+    lines = VisionMac.detect_faces(FACE_FIXTURE).split("\n")
+    assert_equal(1, lines.length)
+
+    parts = lines.first.split("\t")
+    assert_equal(4, parts.length, "Expected 4 tab-separated values, got: #{lines.first.inspect}")
+    parts.each do |p|
+      f = Float(p)
+      assert(f >= 0.0 && f <= 1.0, "Expected normalized 0..1 value, got: #{p.inspect}")
     end
   end
 

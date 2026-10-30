@@ -72,7 +72,7 @@ Library only, same as `rb-vision-ocrmac`. Interactive checks via `bundle exec ra
 
 ## TDD discipline
 
-t-wada style RED → GREEN → REFACTOR independent commits. test-unit. Real fixtures under `test/fixtures/`: `sample_jp.png` (shared with rb-vision-ocrmac) holds text and no faces, so the face test asserts the output shape only when faces are present.
+t-wada style RED → GREEN → REFACTOR independent commits. test-unit. Real fixtures under `test/fixtures/`: `sample_jp.png` (shared with rb-vision-ocrmac) holds text and no faces. The single-face test runs only when `VISION_MAC_TEST_FACE` names a local image holding exactly one face; no photo of a person is committed.
 
 ## Related projects
 
@@ -89,6 +89,7 @@ macOS 27+, Apple Silicon, Xcode 27 (Swift 6.4, builds run `xcrun swift`), Ruby 4
 - No Python source
 - No code comments. Swift is documented with DocC (`///`, `- Parameter`, `- Returns`, ``` ``symbol`` ``` links); Ruby is documented with `#` comments above declarations in `sig/vision_mac.rbs`. History goes in commit messages
 - Do not hand-edit `ext/vision_mac/swift_mkmf.rb`; re-copy it from swift_gem
+- Do not commit photos of people
 - Do not git-track `Gemfile.lock`
 - Do not promise thread safety for concurrent calls — add a lock if needed
 - Do not split PDFs / multi-page images here — leave that to callers
